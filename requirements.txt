@@ -1,0 +1,9 @@
+ipython
+pandas
+pandas-stubs
+pyarrow
+setuptools
+typing
+mypy
+pytesseract
+pandasql

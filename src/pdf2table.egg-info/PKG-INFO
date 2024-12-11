@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: pdf2table
+Version: 0.0.1
+Summary: A package for extracting a single table from a single page in a pdf into pandas DataFrame
+Author-email: Martin Hunting <martin.hunting@hotmail.com>
+License: MIT License
+Project-URL: Homepage, https://github.com/yourusername/my_package
+Project-URL: Documentation, https://yourusername.github.io/my_package
+Project-URL: Source, https://github.com/yourusername/my_package
+Project-URL: Tracker, https://github.com/yourusername/my_package/issues
+Requires-Python: >=3.11
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: pyarrow
+Requires-Dist: pandasql
