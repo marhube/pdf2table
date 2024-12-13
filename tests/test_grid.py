@@ -15,18 +15,36 @@ import unittest
 #
 test_data_dir = "/home/m01315/General_Python/Packages/pdf2table/test_data"
 path_page_data =  os.path.join(test_data_dir,'tesseract_data.parquet')
+path_page_data2 =  os.path.join(test_data_dir,'tesseract_data2.parquet')
+
 page_data = pd.read_parquet(path_page_data,engine="pyarrow")
+page_data2 = pd.read_parquet(path_page_data2,engine="pyarrow")
 test_values = pd.read_csv(os.path.join(test_data_dir,"test_values.csv"),header=0,sep=";")
 grid_miner_obj = GridMiner(tesseract_page_data = page_data,skip_lines_top=1,skip_lines_bottom=1,hard_coded_regex_filter = [r'^0\S$'] )
+grid_miner_obj2 = GridMiner(tesseract_page_data = page_data,skip_lines_top=1,skip_lines_bottom=1,hard_coded_regex_filter = [r'^0\S$'] )
 column_names = ['Adresse','Eiendom','Takst','Skattenivå','Bunnfradrag','Grunnlag','Promillesats','Skatt','Fritak']
 #
+mock_text = "sdfs"
+mock_text_list = [f" {mock_text} ",np.nan,"  ",f"{mock_text}",f" {mock_text}"]
+mock_pytesseract_data = pd.DataFrame(
+    {'text' : mock_text_list,
+     'conf' : [56,-1,49,76,45],
+     'left' : [234,350,78,432,546],
+     'width' : [70,74,34,64,65],
+     'top' : [45,46,345,87,89],
+     'height' : [23,25,534,22,21]     
+     }
+)
+#
+mock_grid_miner_obj = GridMiner(tesseract_page_data = mock_pytesseract_data.copy(),skip_lines_top=1,skip_lines_bottom=1,hard_coded_regex_filter = [r'^0\S$'] )
 
 class TestGrid(unittest.TestCase):
     def test_instantiation(self):
+        print("Er nå inne i TestGrid.test_instantiation")
         self.assertIsInstance(grid_miner_obj,GridMiner)
     #
     def test_set_right(self):
-        print("Er nå inne i test_set_right")  
+        print("Er nå inne i TestGrid.test_set_right")  
         subresults = []    
         for row in grid_miner_obj.tesseract_page_data.itertuples():
             subresults.append((getattr(row,"right") == getattr(row,"left") + getattr(row,"width")))
@@ -34,17 +52,16 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_set_bottom(self):
-        print("Er nå inne i test_set_bottom")
+        print("Er nå inne i TestGrid.test_set_bottom")
         subresults = []    
         for row in grid_miner_obj.tesseract_page_data.itertuples():
-            subresults.append((getattr(row,"bottom") == getattr(row,"top") + getattr(row,"height")))
-        #
+            subresults.append((getattr(row,"bottom") == getattr(row,"top") + getattr(row,"height")))         
         self.assertTrue(pd.Series(subresults).all()) 
 
 
     #
     def test_find_row_boundary_candidates(self):
-        print("Er nå inne i test_find_row_boundary_candidates")
+        print("Er nå inne i TestGrid.test_find_row_boundary_candidates")
         row_boundary_candidates =  grid_miner_obj.find_row_boundary_candidates()
         page_data= grid_miner_obj.tesseract_page_data.query("conf > 0").copy()
         is_increasing = True
@@ -60,7 +77,7 @@ class TestGrid(unittest.TestCase):
     #
     #Memo: Skal teste at "vertikale skillelinjer" er stigende
     def test_extract_row_boundaries(self):
-        print("Er nå inne i test_extract_row_boundaries")
+        print("Er nå inne i TestGrid.test_extract_row_boundaries")
         row_boundaries =  grid_miner_obj.extract_row_boundaries().sort_values(by='top_boundary')
         is_increasing = True
         prev_value =  -1000
@@ -75,7 +92,7 @@ class TestGrid(unittest.TestCase):
     #
     #Tester foreløpig bare at kolonnnenavnene er på samme rad
     def test_set_rownum(self):
-        print("Er nå inne i test_set_rownum")
+        print("Er nå inne i TestGrid.test_set_rownum")
         page_data_with_rownum = grid_miner_obj.tesseract_page_data.query("conf > 0").copy()
         headers = [header.strip() for header in page_data_with_rownum.query(f" rownum == {grid_miner_obj.skip_lines_top}")['text']]
         header_comparison = ['Adresse','Eiendom','Takst','Skattenivå','Bunnfradrag','Grunnlag','Promillesats','Skatt','Fritak']
@@ -93,8 +110,34 @@ class TestGrid(unittest.TestCase):
         #   
         self.assertTrue(pd.Series(subresults).all()) 
     #
+    def test_delete_blank_lines(self):
+        print("Er nå inne i TestGrid.test_delete_blank_lines")
+        mock_data_no_blank_lines = mock_grid_miner_obj.delete_blank_lines().reset_index()
+        non_blank_lines = []
+        row_nr = 0
+        for row in mock_pytesseract_data.itertuples():
+            if getattr(row,"conf") > 0 and re.search(pattern=r'\S',string = getattr(row,"text")) is not None:
+                non_blank_lines.append(row_nr)
+            #
+            row_nr = row_nr + 1
+            #
+        #
+        mock_data_comparison = mock_pytesseract_data.iloc[non_blank_lines,:].reset_index()
+        relevant_columns = [col for col in mock_data_comparison]
+        subresults = []
+        subresults.append(list(mock_data_no_blank_lines.columns)[:len(relevant_columns)] == list(mock_data_comparison.columns))
+        for col in relevant_columns:
+            subresults.append((mock_data_no_blank_lines[col].to_list() == mock_data_comparison[col].to_list()) )
+        #
+        self.assertTrue(pd.Series(subresults).all()) 
+    #
+        
+    
+
+
+
     def test_extract_table_area(self):
-        print("Er nå inne i test_extract_table_area")
+        print("Er nå inne i TestGrid.test_extract_table_area")
         #Memo til self: Metoden "extract_table_area" starter med de original "tesseract-dataene", og har derfor ingen inputargumenter
         table_area = grid_miner_obj.extract_table_area()
         #Øverste rad skal inneholde kolonnenavn 
@@ -108,21 +151,21 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_reset_rownum(self):
-        print("Er nå inne i test_reset_rownum")
+        print("Er nå inne i TestGrid.test_reset_rownum")
         table_area = grid_miner_obj.extract_table_area()
         table_area_new_rownum_values = grid_miner_obj.reset_rownum(table_area)
         sorted_rownum = sorted(table_area_new_rownum_values['rownum'].unique())
         self.assertEqual(sorted_rownum, list(range(len(sorted_rownum))))
     #
     def test_extract_header_area(self):
-        print("Er nå inne i test_extract_header_area")
+        print("Er nå inne i TestGrid.test_extract_header_area")
         header_area = grid_miner_obj.extract_header_area()
         header_text = [value.strip() for value in  header_area['text'].to_list()]
         self.assertEqual(header_text, column_names)
     #
     #
     def test_extract_column_boundaries(self):
-        print("Er nå inne i test_extract_column_boundaries")
+        print("Er nå inne i TestGrid.test_extract_column_boundaries")
         column_boundaries =  grid_miner_obj.extract_column_boundaries().sort_values(by="left_boundary")
         colnum_values = column_boundaries['colnum'].to_list()
         column_name_values = column_boundaries['column'].to_list()        
@@ -145,7 +188,7 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_add_colnum(self):
-        print("Er nå inne i test_add_colnum")
+        print("Er nå inne i TestGrid.test_add_colnum")
         page_data_with_colnum = grid_miner_obj.add_colnum().query("conf > 0").sort_values(["rownum","left"])
         header_values = [value.strip() for value in  page_data_with_colnum.query("rownum == 0")['text'].to_list()]
         table_content = page_data_with_colnum.query("conf > 0 and rownum > 0")
@@ -157,7 +200,7 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_extract_column_values(self):
-        print("Er nå inne i test_extract_column_values")
+        print("Er nå inne i TestGrid.test_extract_column_values")
         page_table_with_colnum = grid_miner_obj.add_colnum()
         subresults = []
         for column in column_names:
@@ -182,8 +225,9 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(pd.Series(subresults).all())
     #
     def test_extract_table(self) -> pd.DataFrame:
-        print("Er nå inne i test_extract_table")
+        print("Er nå inne i TestGrid.test_extract_table")
         values_df = grid_miner_obj.extract_table()
+        values_df2 = grid_miner_obj2.extract_table()
         print(values_df.shape)
         #Tester her bare dimensjon og kolonnenavn
         subresults = []

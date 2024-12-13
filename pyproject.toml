@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf2table"
-version = "0.0.1"
+version = "0.0.2"
 description = "A package for extracting a single table from a single page in a pdf into pandas DataFrame"
 authors = [{name = "Martin Hunting", email = "martin.hunting@hotmail.com"}]
 license = { text = "MIT License" } 
 requires-python = ">=3.11"
 
 dependencies = [
-    "pandas","numpy", "pyarrow","pandasql"
+    "pandas","numpy", "pyarrow","pandasql","Pillow","pymupdf"
 ]
 
 [project.urls]

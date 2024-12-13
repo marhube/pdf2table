@@ -1,4 +1,5 @@
 ipython
+jupyterlab
 pandas
 pandas-stubs
 pyarrow
@@ -6,4 +7,7 @@ setuptools
 typing
 mypy
 pytesseract
+pdf2image
+pymupdf
+Pillow
 pandasql

@@ -1,6 +1,9 @@
+LICENSE
+README.md
 pyproject.toml
 src/pdf2table/__init__.py
 src/pdf2table/grid.py
+src/pdf2table/preprocess.py
 src/pdf2table/py.typed
 src/pdf2table.egg-info/PKG-INFO
 src/pdf2table.egg-info/SOURCES.txt
@@ -8,3 +11,4 @@ src/pdf2table.egg-info/dependency_links.txt
 src/pdf2table.egg-info/requires.txt
 src/pdf2table.egg-info/top_level.txt
 tests/test_grid.py
+tests/test_preprocess.py
