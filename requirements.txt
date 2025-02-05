@@ -3,11 +3,16 @@ jupyterlab
 pandas
 pandas-stubs
 pyarrow
+pyarrow-stubs
 setuptools
 typing
 mypy
 pytesseract
 pdf2image
-pymupdf
+pymupdf==1.24.10
 Pillow
 pandasql
+pdfminer.six==20231228
+pdfplumber # Kun for testing
+
+

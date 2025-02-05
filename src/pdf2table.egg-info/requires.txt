@@ -1,6 +1,10 @@
 pandas
+pandas-stubs
 numpy
 pyarrow
+pyarrow-stubs
 pandasql
 Pillow
-pymupdf
+pymupdf==1.24.10
+pdfminer.six==20231228
+pdfplumber

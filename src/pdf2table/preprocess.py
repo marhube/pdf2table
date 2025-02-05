@@ -10,7 +10,7 @@ import fitz  # type: ignore
 import PIL
 from PIL import Image,ImageFile
 #
-from typing import Self
+from typing import Tuple,Self
 # 
 from pdf2table.grid import CustomizedException
 #
@@ -27,7 +27,7 @@ def validate_pixel_color(pixel_color):
         is_correct_format = pd.Series(boolean_list).all()
     #
     if not is_correct_format:
-        raise_wrong_datatype_pixel_color_exception
+        raise_wrong_datatype_pixel_color_exception(pixel_color)
     #
 #
 def convert_pdf_to_images_in_memory(pdf_path : str, first_page : int=1, last_page : int|None =None, zoom : int =2)-> list[ImageFile.ImageFile]:
@@ -69,9 +69,6 @@ def convert_pdf_to_images_in_memory(pdf_path : str, first_page : int=1, last_pag
     pdf_document.close()
     return images
 #
-
-
-
 class ParsePDF:
     def __init__(
         self,
@@ -102,7 +99,7 @@ class ParsePDF:
         validate_pixel_color(pixel_color)    
         return pixel_color  
     #
-    def remove_background_color(self,rgb_value: tuple[int,int,int])-> Self:
+    def remove_background_color(self,rgb_value: tuple)-> Self:
         validate_pixel_color(rgb_value)
         """
         Removes pixels close to a specified background color and replaces them with white.
@@ -123,10 +120,12 @@ class ParsePDF:
             self.image = self.image.convert('RGB')
         #
         pixels = self.image.load()
-        if pixels is not None: 
+        #
+        if type(pixels).__name__ == 'PixelAccess' and pixels is not None and not isinstance(pixels,float):
             for i in range(self.image.width):
                 for j in range(self.image.height): 
-                    r, g, b = pixels[i, j]
+                    r, g, b =  pixels[i,j] # type: ignore
+                    pixels[i, j]
                     # Calculate Euclidean distance between the current pixel and the target color
                     distance = math.sqrt((r - rgb_value[0]) ** 2 + 
                                          (g - rgb_value[1]) ** 2 + 
@@ -138,6 +137,7 @@ class ParsePDF:
                 #
             #
         else:
+            print(f"pixels har av en eller annen grunn fått feil datatype.\nNå er datatypen til pixels {pixels.__class__}")
             raise_image_failed_to_load_exception()                  
         #            
         return self
@@ -147,8 +147,11 @@ class ParsePDF:
         path_backgounds_snapshot_list = self.path_background_snapshot.copy() if isinstance(self.path_background_snapshot,list) else [self.path_background_snapshot]
         #
         for path_to_snapshot in path_backgounds_snapshot_list:
-            pixel_color = self.calc_pixel_color(path_to_snapshot) 
-            self.remove_background_color(pixel_color)
+            pixel_color = self.calc_pixel_color(path_to_snapshot)
+            if isinstance(pixel_color,tuple):
+                self.remove_background_color(pixel_color)
+            else:
+                raise_wrong_datatype_pixel_color_exception(pixel_color)
         #
         return self
     #   

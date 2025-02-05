@@ -1,6 +1,6 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: pdf2table
-Version: 0.0.2
+Version: 0.0.5
 Summary: A package for extracting a single table from a single page in a pdf into pandas DataFrame
 Author-email: Martin Hunting <martin.hunting@hotmail.com>
 License: MIT License
@@ -11,8 +11,12 @@ Project-URL: Tracker, https://github.com/yourusername/my_package/issues
 Requires-Python: >=3.11
 License-File: LICENSE
 Requires-Dist: pandas
+Requires-Dist: pandas-stubs
 Requires-Dist: numpy
 Requires-Dist: pyarrow
+Requires-Dist: pyarrow-stubs
 Requires-Dist: pandasql
 Requires-Dist: Pillow
-Requires-Dist: pymupdf
+Requires-Dist: pymupdf==1.24.10
+Requires-Dist: pdfminer.six==20231228
+Requires-Dist: pdfplumber
