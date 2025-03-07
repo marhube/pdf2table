@@ -114,6 +114,19 @@ grid_miner_obj_multiline_cell =  GridMiner(
     merge_multiline_column_names = True
     )
 #
+pytesseract_data_right_adjusted = pd.read_parquet(
+    "/home/m01315/General_Python/Packages/pdf2table/explore_output/Scripts/grid_røst/pytesseract_data_page1.parquet",
+    engine= "pyarrow"
+)
+#
+grid_miner_obj_right_adjusted =  GridMiner(
+    tesseract_page_data = pytesseract_data_right_adjusted,
+    skip_lines_top = 1,
+    skip_lines_bottom = 0,
+    vertical_span_header = 1,
+    left_adjusted = False
+    )
+#
 class TestGrid(unittest.TestCase):
     def test_instantiation(self):
         print("Er nå inne i TestGrid.test_instantiation")
@@ -315,7 +328,6 @@ class TestGrid(unittest.TestCase):
                 is_increasing = False
                 break
             #
-        #
         self.assertTrue(is_increasing)
     #
     #Memo: Skal teste at "vertikale skillelinjer" er stigende
@@ -445,6 +457,19 @@ class TestGrid(unittest.TestCase):
         sorted_rownum = sorted(table_area_new_rownum_values['rownum'].unique())
         self.assertEqual(sorted_rownum, list(range(len(sorted_rownum))))
     #
+    def test_find_column_boundary_candidates(self):
+        print("Er nå inne i TestGrid.test_find_column_boundary_candidates")
+        boundary_candidates_left = grid_miner_obj.find_column_boundary_candidates()
+        comparison_left = [200, 1344, 1929, 2128, 2257, 2615, 3123, 3509, 4055, 4545]
+        #
+        boundary_candidates_right = grid_miner_obj_right_adjusted.find_column_boundary_candidates()
+        comparison_right = [79, 107, 133, 159, 184, 220, 299, 396, 464, 542]
+        #
+        subresults = []
+        subresults.append(boundary_candidates_left == comparison_left)
+        subresults.append(boundary_candidates_right == comparison_right)
+        self.assertTrue(pd.Series(subresults).all()) 
+    #
     def test_extract_header_area(self):
         print("Er nå inne i TestGrid.test_extract_header_area")
         header_area = grid_miner_obj.extract_header_area()
@@ -469,9 +494,9 @@ class TestGrid(unittest.TestCase):
         comparison_value = "my_column_name"
         self.assertEqual(column_name, comparison_value)     
     #
-    def test_extract_column_boundaries(self):
-        print("Er nå inne i TestGrid.test_extract_column_boundaries")
-        column_boundaries =  grid_miner_obj.extract_column_boundaries().sort_values(by="left_boundary")
+    def test_extract_column_boundaries_left_adjusted(self):
+        print("Er nå inne i TestGrid.test_extract_column_boundaries_left_adjusted")
+        column_boundaries =  grid_miner_obj.extract_column_boundaries_left_adjusted().sort_values(by="left_boundary")
         colnum_values = column_boundaries['colnum'].to_list()
         column_name_values = column_boundaries['column'].to_list()        
         table_area = grid_miner_obj.extract_table_area().query("conf > 0")
@@ -490,6 +515,48 @@ class TestGrid(unittest.TestCase):
         subresults.append((colnum_values == list(range(len(column_names)))))
         subresults.append((column_name_values == column_names))
         subresults.append(no_overlap)
+        self.assertTrue(pd.Series(subresults).all()) 
+    #
+    def test_extract_column_boundaries_right_adjusted(self):
+        print("Er nå inne i TestGrid.test_extract_column_boundaries_right_adjusted")
+        column_boundaries =  grid_miner_obj_right_adjusted.extract_column_boundaries_right_adjusted().sort_values(by="left_boundary")
+        column_names_right = ['Gnr','Bnr','Fnr','Snr','Takst','Bunnfradrag','Skattegrunnlag','Skattesats','Skattebeløp']
+        colnum_values = column_boundaries['colnum'].to_list()
+        column_name_values = column_boundaries['column'].to_list()        
+        table_area = grid_miner_obj_right_adjusted.extract_table_area().query("conf > 0")
+        filtered_page_data = grid_miner_obj_right_adjusted.filter_boundary_data(table_area)
+        no_overlap = True
+        for row in column_boundaries.itertuples():
+            for boundary_col in ['left_boundary','right_boundary']:
+                unexpected_rows = filtered_page_data.query(f"left <= {getattr(row,boundary_col)} and right >= {getattr(row,boundary_col)}") 
+                if  unexpected_rows.shape[0] > 0:
+                    no_overlap  = False
+                    break
+                #
+            #
+        #
+        subresults = []
+        subresults.append((colnum_values == list(range(len( column_names_right)))))
+        subresults.append((column_name_values ==  column_names_right))
+        subresults.append(no_overlap)
+        self.assertTrue(pd.Series(subresults).all()) 
+    #
+    def test_extract_column_boundaries(self):
+        print("Er nå inne i TestGrid.test_extract_column_boundaries")
+        column_boundaries_left = grid_miner_obj.extract_column_boundaries()
+        column_boundaries_left_comparison = grid_miner_obj.extract_column_boundaries_left_adjusted()
+        subresults = []
+        subresults.append((column_boundaries_left.shape == column_boundaries_left_comparison.shape))
+        for col in column_boundaries_left.columns:
+            subresults.append(column_boundaries_left[col].to_list() == column_boundaries_left_comparison[col].to_list())
+        #
+        column_boundaries_right = grid_miner_obj_right_adjusted.extract_column_boundaries()
+        column_boundaries_right_comparison = grid_miner_obj_right_adjusted.extract_column_boundaries_right_adjusted()
+        #
+        subresults.append((column_boundaries_right.shape == column_boundaries_right_comparison.shape))
+        for col in column_boundaries_right.columns:
+            subresults.append(column_boundaries_right[col].to_list() == column_boundaries_right_comparison[col].to_list())
+        #
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_add_colnum(self):
@@ -616,7 +683,6 @@ class TestGrid(unittest.TestCase):
             subresults.append(page_table_with_multiline_cells[col].to_list() == comparison[col].to_list())
         #
         self.assertTrue(pd.Series(subresults).all())
-        #warnings.warn("Ingen test for GridMiner.gather_multiline_cellser implementert!", UserWarning)
     #
     def test_extract_table(self):
         print("Er nå inne i TestGrid.test_extract_table")

@@ -114,6 +114,16 @@ class TestMunicipalAppraisals(unittest.TestCase):
         melhus_columns_comparison = ['Adresse','Eiendom','Takst','Bunnfradrag','Grunnlag','Promillesats','Skatt','Fritak','Skattenivå_i_prosent']
         self.assertEqual(melhus_columns,melhus_columns_comparison)
     #
+    def test_clean_percent_string(self):
+        print(f"Er nå inne i TestMunicipalAppraisals.test_clean_percent_string")
+        str_values = ['3%o','3%0','3.4 %o','4 % u','5']
+        test_values = []
+        for str_value in str_values:
+            test_values.append(Standard_pdf.clean_percent_string(str_value))
+        #
+        comparison_values = ['3','3','3.4','4','5']
+        self.assertEqual(test_values,comparison_values)
+    #
     def test_clean_percent_columns(self):
         print(f"Er nå inne i TestMunicipalAppraisals.test_clean_percent_columns")
         Standard_pdf_obj.set_header()
@@ -135,10 +145,20 @@ class TestMunicipalAppraisals(unittest.TestCase):
         #
         self.assertTrue(pd.Series(subresults).all())
     #
+    def test_preclean_numeric_string(self):
+        print(f"Er nå inne i TestMunicipalAppraisals.test_preclean_numeric_string")
+        test_values = ["v"," v"," v ","v 34","0o"," ö"]
+        comparison = ["0"]*3 + ["0 34","0o","0"]
+        cleaned_values = []
+        for test_value in test_values:
+            cleaned_values.append(Standard_pdf.preclean_numeric_string(test_value))
+        #
+        self.assertEqual(cleaned_values,comparison)
+    #
     def test_digitize_string(self):
         print(f"Er nå inne i TestMunicipalAppraisals.test_digitize_string")
-        test_values = ["v"," v"," v ","v 34","0o"," ö","kr 1 322 400"]
-        comparison = ["0"]*3 + ["0 34","0o","0","1 322 400"]
+        test_values = ["kr 1 322 400"]
+        comparison = ["1322400"]
         cleaned_values = []
         for test_value in test_values:
             cleaned_values.append(Standard_pdf_obj.digitize_string(test_value))
@@ -182,6 +202,7 @@ class TestMunicipalAppraisals(unittest.TestCase):
         comparison_values = [True,True,False,False]
         self.assertTrue(test_values == comparison_values )
     #
+ 
     def test_extract_from_jumbled_value(self):
         print("Er nå inne i TestMunicipalAppraisals.test_extract_from_jumbled_value")
         test_value1 = "2 854 Ingen"
@@ -210,7 +231,7 @@ class TestMunicipalAppraisals(unittest.TestCase):
         Standard_pdf_obj.clean_percent_columns()
         Standard_pdf_obj.set_cadastre_values()
         Standard_pdf_obj.set_tax_year()
-        Standard_pdf_obj.digitize_numeric_columns()
+        Standard_pdf_obj.preclean_numeric_columns()
         Standard_pdf_obj.clean_jumbled_column_pairs()
         #
         top_tax_exemption_values = Standard_pdf_obj.initial_table[['Skatt','Fritak']].head(len(comparison_tax_values))
@@ -316,14 +337,14 @@ class TestMunicipalAppraisals(unittest.TestCase):
         print("Er nå inne i TestMunicipalAppraisals.test_clean_and_convert_float")
         string_values =  ['3,5','3.5','3,5,2','2']
         test_values =  [Standard_pdf.clean_and_convert_float(string_value) for string_value in string_values]
-        comparison_values = [3.5] * 2 + [None,2.0]
+        comparison_values = [3.5] * 2 + [None,2.0] 
         self.assertEqual(test_values,comparison_values)
     #
     def test_clean_and_convert_integer(self):
         print("Er nå inne i TestMunicipalAppraisals.test_clean_and_convert_integer")
-        string_values =  ['3','3578','3578689']
+        string_values =  ['3','3578','3578689','4412877,00']
         test_values =  [Standard_pdf.clean_and_convert_integer(string_value) for string_value in string_values]
-        comparison_values = [3,3578,3578689]
+        comparison_values = [3,3578,3578689,4412877]
         self.assertEqual(test_values,comparison_values)
     #
     def test_clean_and_convert2num(self):

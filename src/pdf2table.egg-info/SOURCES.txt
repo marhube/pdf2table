@@ -2,6 +2,7 @@ LICENSE
 README.md
 pyproject.toml
 src/pdf2table/__init__.py
+src/pdf2table/fitz2miner.py
 src/pdf2table/grid.py
 src/pdf2table/municipal_appraisals.py
 src/pdf2table/plumber2miner.py
@@ -12,6 +13,7 @@ src/pdf2table.egg-info/SOURCES.txt
 src/pdf2table.egg-info/dependency_links.txt
 src/pdf2table.egg-info/requires.txt
 src/pdf2table.egg-info/top_level.txt
+tests/test_fitz2miner.py
 tests/test_grid.py
 tests/test_municipal_appraisals.py
 tests/test_plumber2miner.py

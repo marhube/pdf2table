@@ -20,7 +20,7 @@ filenames_background_snapshots = [filename for filename in os.listdir(test_data_
 path_background_snapshot = [os.path.join(test_data_dir,filename) for filename in  filenames_background_snapshots]
 #
 image_pymupdf = convert_pdf_to_images_in_memory(path_pdf_file, first_page=1, last_page=1,zoom=7)[0] 
-image_tesseract = convert_from_path(path_pdf_file,dpi = 500,first_page=1,last_page=1)[0]
+image_tesseract = convert_from_path(path_pdf_file,dpi = 300,first_page=1,last_page=1)[0]
 #
 parse_pdf_obj_pymupdf = ParsePDF(image = image_pymupdf,path_background_snapshot = path_background_snapshot)
 parse_pdf_obj_tesseract = ParsePDF(image = image_tesseract,path_background_snapshot = path_background_snapshot)

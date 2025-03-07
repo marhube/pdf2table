@@ -24,7 +24,7 @@ evenes_dir = os.path.join("/home/m01315/General_Python/Packages/pdf2table/explor
 plumber_evenes_filepath = os.path.join(evenes_dir,'Eiendomsskatteliste_Evenes_2024.pdf')
 # Trekker først ut "pdfplumber"-data på datarammeformat
 #
-plumber2miner_obj = Plumber2tesseract(filepath = plumber_evenes_filepath,vertical_scaling_factor = 1,horizontal_scaling_factor = 1)
+plumber2miner_obj = Plumber2tesseract(filepath = plumber_evenes_filepath,vertical_scaling_factor = 1,horizontal_scaling_factor = 1,warn_of_blank_pages = False)
 #
 def create_tesseract_from_pdfplumber(pdfplumber_frame: pd.DataFrame,ndigits: int = 0) -> pd.DataFrame:
     tesseract_frame = pdfplumber_frame[['text']].copy()
@@ -85,6 +85,22 @@ class Test_plumber2miner(unittest.TestCase):
         for col in comparison:
             subresults.append(tesseract_data[col].to_list() == comparison[col].to_list())
         #
+        self.assertTrue(pd.Series(subresults).all()) 
+    #
+    def test_initialize_tesseract_frame(self):
+        print("Er nå inne i Test_plumber2miner.test_initialize_tesseract_frame")
+        initial_frame = plumber2miner_obj.initialize_tesseract_frame(pd.DataFrame())
+        comparison_frame = pd.DataFrame()
+        comparison_frame['text'] = ""
+        for col in ['conf','top','bottom','left','right']:
+            comparison_frame[col] = pd.array([],dtype=pd.Int64Dtype())
+        #
+        subresults = []
+        #Memo til selv: Sjekker at det er samme datatype
+        for col in comparison_frame:
+            subresults.append(str(initial_frame[col].dtype) == str(comparison_frame[col].dtype)  )
+            subresults.append(initial_frame[col].to_list() == comparison_frame[col].to_list())
+        # 
         self.assertTrue(pd.Series(subresults).all()) 
     #
     def test_convert_from_path(self):

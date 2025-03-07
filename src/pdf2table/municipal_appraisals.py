@@ -27,7 +27,7 @@ class Standard_pdf:
         kommunenavn: str,
         publication_year: int,
         replacement_dict : Dict[str,str] = {'Eiendom':'GID','Skattenivå': 'Skattenivå_i_prosent'},
-        float_columns: str|list[str] = ['Skattenivå_i_prosent','Promillesats'],
+        float_columns: str|list[str] = ['Promillesats'],
         integer_columns : str|list[str] = ['gnr','bnr','festenr','snr','Takst','Skattenivå_i_prosent','Bunnfradrag','Grunnlag','Skatt','Skatteår'],
         jumbled_column_pairs  : tuple[str,str]|list[tuple[str,str]] = [('Skattenivå_i_prosent','Bunnfradrag'),('Grunnlag','Promillesats'),('Skatt','Fritak')], #Kolonnepar der den ene er klint opp i den andre og derfor kan være vanskelig å skille
         percent_columns :  str|list[str] = ['Skattenivå_i_prosent','Bunnfradrag','Grunnlag','Promillesats'], 
@@ -35,9 +35,11 @@ class Standard_pdf:
         missing_columns : str|list[str] = [],
         clean_header_regex : str|list[str] = r'\W', #Rens vekk evt spesialtegn fra kolonnenavn
         GID_separator: str = "/",
+        thousands_separator : str = " ",
         cadastre_values_already_set : bool = False,
         output_GID_separator: str = "/"    ,
-        remove_missing_column_from_jumbled_pair : bool = True # Veldig teknisk parameter
+        remove_missing_column_from_jumbled_pair : bool = True, # Veldig teknisk parameter
+        force_dejumbling : bool = False
         ) :
         #Memo til selv: Gjør først str|list om til list
         if isinstance(float_columns,str):
@@ -76,9 +78,11 @@ class Standard_pdf:
         self.missing_columns = missing_columns
         self.clean_header_regex = clean_header_regex
         self.GID_separator = GID_separator
+        self.thousands_separator = thousands_separator
         self.cadastre_values_already_set = cadastre_values_already_set
         self.output_GID_separator = output_GID_separator
         self.remove_missing_column_from_jumbled_pair = remove_missing_column_from_jumbled_pair
+        self.force_dejumbling = force_dejumbling
         #
     #OBSS bør ha sin egen enhetstest
     def clean_column_name(self,column_name: str) -> str:
@@ -147,34 +151,56 @@ class Standard_pdf:
         #
         return self
     #
+    @staticmethod
+    def clean_percent_string(raw_string: str) -> str:
+        cleaned_string = re.sub(pattern=r'\s*(%|‰).*',repl='',string=raw_string)
+        return cleaned_string
+    #
+
     #Memo til selv: Her følger en rekke kjempeesoteriske funksjoner
     def clean_percent_columns(self) -> Self:
         for column in self.percent_columns:
-            self.initial_table[column] = self.initial_table[column].map(lambda x: re.sub(pattern=r'(%|‰).*',repl='',string=x))
+            self.initial_table[column] = self.initial_table[column].map(lambda x: Standard_pdf.clean_percent_string(x))
         #        
         return self
     #
-    @staticmethod  #Bruk på alle numeriske kolonner
-    def digitize_string(raw_string: str) -> str:
+    @staticmethod
+    def preclean_numeric_string(raw_string: str) -> str:
+        # #Bytter ut "isolert enkeltbokstav" med "0".
         #Bytter ut "isolert v" med "0".
         digitized_string = raw_string.strip()
-        #Tar bort forstavelse "kr" og anndre
-        remove_patterns = [r'^kr\s*']
-        for remove_pattern in remove_patterns:
-            digitized_string = re.sub(pattern=remove_pattern,repl="",string=digitized_string,flags=re.IGNORECASE)
-        #
-        # #Bytter ut "isolert enkeltbokstav" med "0".
         zero_patterns = [r'^(o|ö)[a-z]',r"^([a-z]|ö)$",r"(?<=\s)([a-z]|ö)$",r"^([a-z]|ö)(?=\s)" ,r"(?<=\s)([a-z]|ö)(?=\s)"]
         for zero_pattern in zero_patterns:
             digitized_string = re.sub(pattern=zero_pattern,repl="0",string=digitized_string,flags=re.IGNORECASE)
         #
+        return digitized_string  
+    #Memo til slev:  preclean skal i utgangspunktet kun være nødvendig når "bbox-dataene " er laget med  "Tesseract-metoden"
+    def preclean_numeric_columns(self) -> Self:
+        for column in self.numeric_columns:
+            #Må sjekke at ikke allerede er numerisk
+            if str(self.initial_table[column].dtype) == 'object':
+                self.initial_table[column] = self.initial_table[column].map(lambda x: Standard_pdf.preclean_numeric_string(x))
+            #
+        #
+        return self
+    #
+    def digitize_string(self,raw_string: str) -> str:
+        #Bytter ut "isolert v" med "0".
+        digitized_string = raw_string.strip()
+        #Tar bort forstavelse "kr" og anndre        
+        remove_patterns = [r'^kr\s*']
+        for remove_pattern in remove_patterns:
+            digitized_string = re.sub(pattern=remove_pattern,repl="",string=digitized_string,flags=re.IGNORECASE)
+        #
+        ##Tar til slutt bort evt tusenskilletegn
+        digitized_string = digitized_string.replace(self.thousands_separator,'')
         return digitized_string            
     #
     def digitize_numeric_columns(self) -> Self:
         for column in self.numeric_columns:
             #Må sjekke at ikke allerede er numerisk
             if str(self.initial_table[column].dtype) == 'object':
-                self.initial_table[column] = self.initial_table[column].map(lambda x: Standard_pdf.digitize_string(x))
+                self.initial_table[column] = self.initial_table[column].map(lambda x: self.digitize_string(x))
             #
         #
         return self
@@ -185,9 +211,9 @@ class Standard_pdf:
         remaining_string = re.sub(pattern="^0\s*",repl='',string=combined_string)
         return zero_value,remaining_string   
     #
-    @staticmethod
     #Memo tl selv: Forutsetter her at allerede har håndtert tilfellet der "skattestrengen" begynner med "0".
-    def looks_like_positive_integer(substr: str,internal_index: int) -> bool:
+    @staticmethod
+    def looks_like_positive_integer(substr: str,internal_index: int= 0) -> bool:
         passes_test = False
         if len(substr) > 0 and re.search(pattern=r'\D+',string = substr) is None: # ser ut som en sifferrekke
             # Tallet kan ikke starte med 0. Beløp større enn 1 million må være i et helt antall tusen kroner
@@ -199,12 +225,15 @@ class Standard_pdf:
         return passes_test
     #
     @staticmethod
-    def looks_like_float(substr: str) -> bool:
-        float_value = Standard_pdf.clean_and_convert2num(substr,integer_col= False)
-        return isinstance(float_value,float)
+    def looks_like_float(substr: str,internal_index: int = 0) -> bool:
+        passes_test = False
+        if internal_index == 0:
+            float_value = Standard_pdf.clean_and_convert2num(substr,integer_col= False)
+            passes_test = isinstance(float_value,float)
+        #
+        return passes_test
     #
-    @staticmethod
-    def extract_from_jumbled_value(combined_string) -> Tuple[str,str]:
+    def extract_from_jumbled_value(self,combined_string: str) -> Tuple[str,str]:
         left_value = ''
         right_value = ''
         if combined_string.startswith("0"): #Spesialtilfelle. Isåfall
@@ -214,10 +243,16 @@ class Standard_pdf:
             left_value_splits = []
             space_splits = re.split(pattern=r'\s+',string = combined_string)
             remaining_space_splits = space_splits.copy()
-            for enum,space_split in enumerate(space_splits):                
-                if Standard_pdf.looks_like_positive_integer(space_split,enum) or Standard_pdf.looks_like_float(space_split):
-                    left_value_splits.append(space_split)
-                    #Fjerner første element i "remaining_space_splits"
+            for enum,space_split in enumerate(space_splits):  
+                digitized_string = space_split.replace(self.thousands_separator,'')    
+                digitized_string = self.digitize_string(digitized_string)
+                digitized_string = self.clean_percent_string(digitized_string)
+                #       
+                if (Standard_pdf.looks_like_positive_integer(space_split,enum) or 
+                    Standard_pdf.looks_like_positive_integer(digitized_string ,enum) or
+                    Standard_pdf.looks_like_float(digitized_string ,enum)): #Memo til selv: Vurdere å skille logikken på denne linjen ut i egen funksjon
+                    # Legger til streng if "left_value_splits" og fjerner første element i "remaining_space_splits"
+                    left_value_splits.append(space_split)                    
                     remaining_space_splits.pop(0)
                 #Memo til selv: I alle andre tilfelelr enn hvis verdien er en "sifferrekke" (positivt heltall) så skal det ikke hentes inne mer enn én "space_split"
                 if not Standard_pdf.looks_like_positive_integer(space_split,enum):
@@ -238,8 +273,8 @@ class Standard_pdf:
             for row in self.initial_table.itertuples():
                 left_column_value = getattr(row,left_column)
                 right_column_value = getattr(row,right_column)
-                if left_column_value  == "" or right_column_value  == "":
-                    left_column_value,right_column_value = Standard_pdf.extract_from_jumbled_value(left_column_value  +  right_column_value)
+                if left_column_value  == "" or right_column_value  == "" or self.force_dejumbling:
+                    left_column_value,right_column_value = self.extract_from_jumbled_value(left_column_value  +  right_column_value)
                 #
                 list_left_column_values.append(left_column_value)
                 list_right_column_values.append(right_column_value)
@@ -303,12 +338,13 @@ class Standard_pdf:
             float_value = float('.'.join(value_parts)) #Gjør nå om til float selv om i utgangspunktet er integer
         # 
         return float_value 
-    #
+    #Memo til selv: Aksepterer nå i "clean_and_convert_integer" at det kan være desimaler
     @staticmethod
     def clean_and_convert_integer(value: str) -> int|None:
         converted_value = None
+        value = re.sub(pattern=r'(,|\.)0+$',repl='',string=value)
         #
-        if re.search(pattern=r"\D",string=value) is None:
+        if re.search(pattern=r'^\d+$',string = value) is not None:
             converted_value = int(value)
         return converted_value  
     #
@@ -373,9 +409,10 @@ class Standard_pdf:
         #
         self.set_tax_year()
         self.set_municip_values()
+        self.preclean_numeric_columns()
+        self.clean_jumbled_column_pairs()
         self.clean_percent_columns()
         self.digitize_numeric_columns()
-        self.clean_jumbled_column_pairs()
         # Forteller nå eksplitt til "casting-metoden" at integerkolonnnene skal være integer
         for col in self.numeric_columns:
             integer_col = (col in self.integer_columns)

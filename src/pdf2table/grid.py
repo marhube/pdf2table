@@ -39,14 +39,15 @@ class GridMiner:
         skip_lines_bottom: int = 0,
         max_rows: int = 1000,    
         max_columns: int = 1000, 
-        required_regex: str|list[str] = [r'\w',r'^[^_]+$'],
+        required_regex: str|list[str] = [r'(\w|/)',r'^[^_]+$'],
         max_median_factor: float = 2.5, 
         vertical_span_header: int = 1,
         clean_column_name_regex: str|list[str] = r'\W',
         header_area: pd.DataFrame|None = None,
         merge_multiline_column_names : bool = False,
         row_grouping_criteria : int = 0,
-        apply_row_boundary_filter : bool = True
+        apply_row_boundary_filter : bool = True,
+        left_adjusted : bool = True
 
     ) :
         # Initialiserer verdier
@@ -70,6 +71,7 @@ class GridMiner:
         self.merge_multiline_column_names = merge_multiline_column_names
         self.row_grouping_criteria = row_grouping_criteria
         self.apply_row_boundary_filter = apply_row_boundary_filter
+        self.left_adjusted  = left_adjusted 
         #Regner ut "right" og "bottom" og finner radnumre
         self.set_right()
         self.set_bottom()
@@ -431,6 +433,9 @@ class GridMiner:
         #Memo til selv: OBSSSSSSS Må passe på å velge kandiater fra den ufiltrerte "table_area" og ikke fra "filtered_page_data"
         # Dette fordi koloneneoverskriftene (f.eks for Vefsn) i noen tilfeller er spredt over to linjer med overlappende "left" og "right"
         unique_left_minus_one_values =  [int(val) -1 for val in table_area['left'].unique()]
+        if not self.left_adjusted: #hvis kolonnene er "høyre-justert"
+            unique_left_minus_one_values =   [int(val) +1 for val in table_area['right'].unique()]
+        #
         for value in sorted(unique_left_minus_one_values):
             #Memo til selv: Tar nå kun bort akkurat de kolonnenavnene jeg må ta bort
             if  filtered_page_data.query(f"rownum >= 0 and left <= {value} and right >= {value}").shape[0] == 0:
@@ -450,7 +455,7 @@ class GridMiner:
         #
         return column_name
     #
-    def extract_column_boundaries(self) -> pd.DataFrame:
+    def extract_column_boundaries_left_adjusted(self) -> pd.DataFrame:
         table_area =  self.extract_table_area().query("conf > 0")   
         header_area = self.extract_header_area().sort_values("left",ascending=False)
         column_boundary_candidates = self.find_column_boundary_candidates()
@@ -484,6 +489,45 @@ class GridMiner:
         )
         #
         return  column_boundaries
+    #
+    def extract_column_boundaries_right_adjusted(self) -> pd.DataFrame:
+        table_area =  self.extract_table_area().query("conf > 0")   
+        header_area = self.extract_header_area().sort_values("right")
+        column_boundary_candidates = self.find_column_boundary_candidates()
+        column_names : list[str] = []
+        left_values : list[int] = []
+        right_values : list[int] = []
+        #Fra venstre mot høyre
+        previous_right = table_area['left'].min() -1
+        for header_area_row in header_area.itertuples():
+            left_values.append(previous_right)
+            column_name = self.clean_column_name(getattr(header_area_row,"text").strip())
+            column_names.append(column_name)
+            column_name_right_pos  = getattr(header_area_row,"right")
+            next_right_value = min([value for value in column_boundary_candidates if value > column_name_right_pos])
+            right_values.append(next_right_value)
+            previous_right = next_right_value
+        #
+        colnum_values = list(range(len(column_names)))
+        column_boundaries = pd.DataFrame(
+            {
+                'colnum': colnum_values,
+                'column':column_names,
+                'left_boundary': left_values,
+                'right_boundary': right_values
+            }            
+        )
+        #
+        return  column_boundaries
+    #        
+    def extract_column_boundaries(self) -> pd.DataFrame:
+        column_boundaries = pd.DataFrame()
+        if self.left_adjusted:
+            column_boundaries = self.extract_column_boundaries_left_adjusted()
+        else:
+            column_boundaries = self.extract_column_boundaries_right_adjusted()
+        #
+        return column_boundaries
     #
     def add_colnum(self) -> pd.DataFrame:
         # 
@@ -554,9 +598,9 @@ class GridMiner:
             .apply(lambda x: " ".join(x))
             .reset_index()
         )
-        #Memo til selv: Imputerer nå bevisst inn "" for missing
+        #Memo til selv: Imputerer nå bevisst inn "" for missing. Sorterer på "rownum" for å sikre at verdiene skal komme i intuitiv rekkefølge
         all_rownum_values_df = pd.DataFrame({'rownum' : [rownum for rownum in page_table_with_colnum['rownum'].unique() if rownum > 0]})
-        outer_column_values_table = pd.merge(left = all_rownum_values_df,right=column_values_df ,on = "rownum",how = 'left')
+        outer_column_values_table = pd.merge(left = all_rownum_values_df,right=column_values_df ,on = "rownum",how = 'left').sort_values(["rownum"])
         #
         outer_column_values_table['text'] = outer_column_values_table['text'].map(lambda x : "" if pd.isna(x) else x)
         column_values =  outer_column_values_table['text'].to_list()
